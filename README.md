@@ -20,6 +20,7 @@ webview (React)  ──HTTP/SSE──▶  Rust media server  ──stdin/stdout�
 | The playlist is 2.5 MB of cross-origin M3U | the backend downloads and parses it once, exposing typed JSON over loopback |
 | Chromium cannot read a *live* chunked HTTP stream progressively | ffmpeg output is relayed over a **WebSocket**, which streams correctly and works identically in the app and in a browser |
 | Roughly half the playlist is offline at any moment | a **probe** endpoint reports real resolution/codec/latency; offline channels are **hidden by default** and failures surface as an explicit, actionable state |
+| A probe that merely runs out of time used to be reported as `offline` | only an explicit refusal (403/404, refused connection, unresolvable host) is `offline`; a timeout is **`degraded`** and stays visible, and the channel on screen is never hidden |
 | Playback cutting out on jittery sources | the player keeps a **~2 MB demuxer input stash** (≈6–8 s cushion) plus latency chasing; measured 0 stalls over 15 s of sampling |
 
 ### No blank screens
@@ -126,7 +127,7 @@ preinstalled on Windows 11 (on Windows 10 use the Evergreen bootstrapper once).
 | `GET /api/meta` | ffmpeg path/version, playlist status, channel counts |
 | `GET /api/channels` | parsed playlist with country, language, resolution badges |
 | `POST /api/playlist/refresh` | re-download the upstream playlist |
-| `POST /api/probe` | health/resolution probe for up to 48 channels (10 min cache) |
+| `POST /api/probe` | health/resolution probe for up to 24 channels (10 min cache) |
 | `POST /api/play` | start or attach to a session for a channel |
 | `POST /api/control` | `pause` / `play` / `stop` (ffmpeg stdin) |
 | `GET /api/sessions` | live session diagnostics |
