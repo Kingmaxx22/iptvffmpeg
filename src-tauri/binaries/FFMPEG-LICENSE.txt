@@ -1,0 +1,14 @@
+Bundled ffmpeg
+==============
+
+ffmpeg version 9.0.2-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers
+
+Source: https://www.gyan.dev/ffmpeg/builds/ (static Windows build,
+essentials configuration, includes libx264 and libx265).
+
+ffmpeg is licensed under the GNU General Public License, version 2 or later.
+The complete licence text ships inside the ffmpeg source distribution at
+https://ffmpeg.org/legal.html and https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+ffmpeg is a free software project. This bundled binary is redistributed
+unmodified under the terms of that licence.

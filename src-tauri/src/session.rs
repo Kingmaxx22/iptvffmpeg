@@ -28,7 +28,9 @@ const RING_CAPACITY: usize = 2 * 1024 * 1024;
 const STALL_TIMEOUT: Duration = Duration::from_secs(15);
 /// Nobody watching and untouched for this long == shut ffmpeg down.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(45);
-const MAX_RESTARTS: u32 = 5;
+/// A dead endpoint must not respawn ffmpeg forever; three tries is enough to
+/// ride out a transient CDN hiccup without churning processes in the background.
+const MAX_RESTARTS: u32 = 3;
 const MAX_LOG_LINES: usize = 40;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -463,7 +465,7 @@ impl Session {
         );
 
         let args = build_args(&self.channel, &self.cfg);
-        let mut child = match Command::new(&self.ffmpeg)
+        let mut child = match crate::ffmpeg::hide_console(Command::new(&self.ffmpeg))
             .args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

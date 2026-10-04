@@ -44,6 +44,16 @@ fn set_always_on_top(window: tauri::WebviewWindow, on: bool) -> Result<(), Strin
 
 pub fn run() {
     tauri::Builder::default()
+        // Must be registered first: a second launch exits here, before setup
+        // runs, so it can never start a second media server or a second
+        // ffmpeg transcoder.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .invoke_handler(tauri::generate_handler![
             media_base,
             set_fullscreen,

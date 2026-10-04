@@ -45,8 +45,11 @@ use crate::playlist::{self, Channel};
 use crate::session::{Session, SessionManager, SessionSnapshot};
 
 const PROBE_TTL: Duration = Duration::from_secs(600);
-const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
-const MAX_PROBE_BATCH: usize = 48;
+/// Probing spawns a real ffmpeg per channel, so it is deliberately cheap:
+/// a short window, few at a time, and a hard cap on the batch.
+const PROBE_TIMEOUT: Duration = Duration::from_secs(6);
+const MAX_PROBE_BATCH: usize = 24;
+const PROBE_CONCURRENCY: usize = 3;
 /// Logo cache: bounded so a long session cannot grow without limit.
 const LOGO_CACHE_MAX: usize = 512;
 const LOGO_TIMEOUT: Duration = Duration::from_secs(6);
@@ -173,7 +176,7 @@ struct ClientLog {
 
 /// Probe a batch of channels concurrently, caching recent results.
 async fn probe_batch(state: &Arc<AppState>, ids: Vec<String>) -> HashMap<String, ProbeInfo> {
-    let semaphore = Arc::new(Semaphore::new(6));
+    let semaphore = Arc::new(Semaphore::new(PROBE_CONCURRENCY));
     let jobs: Vec<(String, Channel)> = ids
         .into_iter()
         .take(MAX_PROBE_BATCH)
@@ -204,7 +207,7 @@ async fn probe_batch(state: &Arc<AppState>, ids: Vec<String>) -> HashMap<String,
     });
 
     let results: Vec<(String, ProbeInfo)> = futures_util::stream::iter(futures)
-        .buffer_unordered(6)
+        .buffer_unordered(PROBE_CONCURRENCY)
         .collect()
         .await;
 
@@ -264,7 +267,7 @@ async fn check_ffmpeg(state: &Arc<AppState>) {
 
     let result = tokio::time::timeout(
         Duration::from_secs(8),
-        Command::new(&state.ffmpeg)
+        crate::ffmpeg::hide_console(Command::new(&state.ffmpeg))
             .arg("-version")
             .stdin(Stdio::null())
             .output(),

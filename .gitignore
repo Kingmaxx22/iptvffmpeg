@@ -5,6 +5,11 @@ src-tauri/target/
 src-tauri/gen/
 src-tauri/artifacts/
 
+# Bundled ffmpeg sidecar: ~100 MB, fetched by `npm run ffmpeg:fetch` instead of
+# being committed. FFMPEG-LICENSE.txt next to it is tracked (GPL attribution).
+src-tauri/binaries/*
+!src-tauri/binaries/FFMPEG-LICENSE.txt
+
 # Local agent tooling, not part of the application
 .agents/
 .claude/

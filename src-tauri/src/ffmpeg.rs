@@ -92,9 +92,12 @@ pub struct ProbeInfo {
 
 /// Locate an ffmpeg binary.
 ///
-/// Order: explicit override -> `FFMPEG_PATH` -> a Tauri sidecar next to the
-/// executable -> whatever is on `PATH`. An explicit error message matters here:
-/// a missing ffmpeg is the single most likely cause of "nothing plays".
+/// Order: explicit override -> `FFMPEG_PATH` -> the bundled sidecar -> whatever
+/// is on `PATH`. The sidecar wins over `PATH` on purpose: a Scoop/choco/winget
+/// ffmpeg is often a console shim that flashes a black window on every spawn
+/// and can double-spawn the real binary, which is exactly the behaviour this
+/// app was built to avoid. An explicit error message matters here: a missing
+/// ffmpeg is the single most likely cause of "nothing plays".
 pub fn resolve_ffmpeg(explicit: Option<&str>) -> Result<PathBuf, String> {
     if let Some(path) = explicit {
         let path = PathBuf::from(path);
@@ -111,18 +114,47 @@ pub fn resolve_ffmpeg(explicit: Option<&str>) -> Result<PathBuf, String> {
         }
     }
 
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            for name in ["ffmpeg.exe", "ffmpeg", "ffmpeg-x86_64-pc-windows-msvc.exe"] {
-                let candidate = dir.join(name);
-                if candidate.exists() {
-                    return Ok(candidate);
-                }
+    for dir in sidecar_dirs() {
+        for name in sidecar_names() {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Ok(candidate);
             }
         }
     }
 
+    // Last resort: whatever `ffmpeg` resolves to on PATH. This may be a console
+    // shim, so callers always spawn it through `hide_console`.
     Ok(PathBuf::from("ffmpeg"))
+}
+
+/// File names Tauri uses for a bundled sidecar: the bare name, then the
+/// target-triple suffixed name for the host we were built for.
+fn sidecar_names() -> Vec<String> {
+    let exe = if cfg!(windows) { ".exe" } else { "" };
+    vec![
+        format!("ffmpeg{exe}"),
+        "ffmpeg".to_string(),
+        format!("ffmpeg-{}{}", env!("FLUENT_TARGET_TRIPLE"), exe),
+    ]
+}
+
+/// Directories a bundled sidecar can live in: next to the running executable
+/// (bundled app and `tauri dev`, both of which put it there), the Tauri
+/// resource directory, and the crate's `binaries/` folder for `cargo run` of
+/// the standalone media server.
+fn sidecar_dirs() -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            dirs.push(dir.to_path_buf());
+            // Windows installer layout.
+            dirs.push(dir.join("../resources"));
+            dirs.push(dir.join("resources"));
+        }
+    }
+    dirs.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries"));
+    dirs
 }
 
 /// Build the full argument list that turns any IPTV URL into an H.264/AAC
@@ -221,6 +253,26 @@ pub fn build_args(channel: &Channel, cfg: &TranscodeConfig) -> Vec<OsString> {
     args
 }
 
+/// Windows flag that starts a child without a console window.
+///
+/// Without it, spawning a console program (or a Scoop shim, which is how ffmpeg
+/// is usually installed on Windows) flashes a black console every time a
+/// transcoder starts or a health probe runs.
+#[cfg(windows)]
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Hide the console window on Windows for any spawned child process.
+#[cfg(windows)]
+pub fn hide_console(mut command: Command) -> Command {
+    command.creation_flags(CREATE_NO_WINDOW);
+    command
+}
+
+#[cfg(not(windows))]
+pub fn hide_console(command: Command) -> Command {
+    command
+}
+
 fn base_input_args(channel: &Channel) -> Vec<OsString> {
     let s = |v: &str| OsString::from(v);
     let mut args: Vec<OsString> = vec![
@@ -258,13 +310,13 @@ pub async fn probe(ffmpeg: &PathBuf, channel: &Channel, timeout: Duration) -> Pr
             .unwrap_or(0)
     };
 
-    let mut child = match Command::new(ffmpeg)
+    let mut child = match hide_console(Command::new(ffmpeg))
         .args(base_input_args(channel))
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
+    .stdin(Stdio::null())
+    .stdout(Stdio::null())
+    .stderr(Stdio::piped())
+    .kill_on_drop(true)
+    .spawn()
     {
         Ok(child) => child,
         Err(e) => {
@@ -438,6 +490,32 @@ impl Default for ProbeInfo {
 mod tests {
     use super::*;
     use crate::playlist;
+
+    #[test]
+    fn bundled_sidecar_wins_over_path() {
+        let explicit = PathBuf::from("C:/nowhere/ffmpeg.exe");
+        assert!(resolve_ffmpeg(Some(explicit.to_str().unwrap())).is_err());
+
+        // No FFMPEG_PATH override here: the repository's fetched sidecar must be
+        // preferred over a bare `ffmpeg` lookup on PATH, which on Windows is
+        // often a console shim.
+        let resolved = resolve_ffmpeg(None).expect("resolve ffmpeg");
+        let is_bare_name = resolved.components().count() == 1;
+        if !is_bare_name {
+            assert!(
+                resolved.to_string_lossy().contains("ffmpeg"),
+                "unexpected ffmpeg candidate: {}",
+                resolved.display()
+            );
+        }
+    }
+
+    #[test]
+    fn sidecar_dirs_include_the_executable_folder() {
+        let dirs = sidecar_dirs();
+        assert!(!dirs.is_empty());
+        assert!(dirs[0].is_absolute());
+    }
 
     /// Mirrors the line matching in `probe` for regression coverage.
     fn classify(raw: &str) -> Option<&'static str> {

@@ -11,11 +11,13 @@ import { probeChannels } from './lib/api'
 import { formatCount, primaryGroup } from './lib/format'
 import type { Channel, ProbeInfo } from './lib/types'
 
-/** How many visible cards get a live health probe. */
-const PROBE_WINDOW = 24
+/** How many visible cards get a live health probe (each probe is one ffmpeg). */
+const PROBE_WINDOW = 12
+/** Upper bound on probes per session, so the encoder count can never run away. */
+const PROBE_BUDGET = 36
 const MAX_PIVOTS = 10
 /** Starter channels considered when picking what to play on launch. */
-const AUTOPLAY_CANDIDATES = 6
+const AUTOPLAY_CANDIDATES = 4
 
 type NavVariant = 'bar' | 'rail' | 'pane'
 
@@ -166,27 +168,64 @@ export default function App() {
 
   /* -------------------------------------------------------- health probes */
 
+  /**
+   * Channels eligible for a health probe.
+   *
+   * Deliberately derived from the raw filters only — never from `probes` or
+   * `hideOffline`. Those change as results arrive, which used to shift the
+   * visible window and keep kicking off new probe rounds (each one an ffmpeg
+   * process) long after the user had stopped scrolling.
+   */
+  const probeTargets = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    let list = channels
+    if (nav === 'favorites') list = list.filter((channel) => favorites.includes(channel.id))
+    if (country) list = list.filter((channel) => channel.country === country)
+    if (tab === 'starter') list = list.filter((channel) => channel.featured)
+    else if (tab !== 'all') list = list.filter((channel) => channel.group.split(';').some((g) => g.trim() === tab))
+    if (needle) {
+      list = list.filter((channel) =>
+        [channel.name, channel.country, channel.group, channel.language, channel.tvgId]
+          .filter(Boolean)
+          .some((field) => field!.toLowerCase().includes(needle)),
+      )
+    }
+    return list
+  }, [channels, nav, favorites, country, tab, query])
+
+  const probedRef = useRef<Set<string>>(new Set())
+
   useEffect(() => {
-    if (filtered.length === 0) return
-    const ids = filtered.slice(0, PROBE_WINDOW).map((channel) => channel.id)
-    const unknown = ids.filter((id) => !probes[id])
+    if (probedRef.current.size >= PROBE_BUDGET) return
+    const unknown = probeTargets
+      .slice(0, PROBE_WINDOW)
+      .map((channel) => channel.id)
+      .filter((id) => !probedRef.current.has(id))
+      .slice(0, PROBE_BUDGET - probedRef.current.size)
     if (unknown.length === 0) return
+
+    // Mark before the request so a re-render mid-flight cannot queue the same
+    // channel twice.
+    unknown.forEach((id) => probedRef.current.add(id))
 
     let cancelled = false
     const timer = window.setTimeout(() => {
       probeChannels(unknown)
         .then((results) => {
-          if (cancelled) return
-          setProbes((current) => ({ ...current, ...results }))
+          if (!cancelled) setProbes((current) => ({ ...current, ...results }))
         })
-        .catch((e) => console.warn('[probe] failed', e))
+        .catch((error) => {
+          // Allow a retry if the request itself failed.
+          unknown.forEach((id) => probedRef.current.delete(id))
+          console.warn('[probe] failed', error)
+        })
     }, 650)
 
     return () => {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [filtered, probes])
+  }, [probeTargets])
 
   const probeCount = Object.keys(probes).length
   const healthyCount = Object.values(probes).filter((p) => p.ok).length

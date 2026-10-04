@@ -6,12 +6,15 @@
   "description": "Fluent IPTV - a Tauri + ffmpeg live TV player for the iptv-org playlist",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run ffmpeg:fetch && tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "tauri": "tauri",
+    "ffmpeg:fetch": "node scripts/fetch-ffmpeg.mjs",
     "dev:server": "cargo run --manifest-path src-tauri/Cargo.toml --bin media-server",
-    "app:dev": "tauri dev"
+    "app:dev": "npm run ffmpeg:fetch && tauri dev",
+    "app:build": "npm run ffmpeg:fetch && tauri build",
+    "stop:orphans": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-orphans.ps1"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",

@@ -42,8 +42,34 @@ This was a hard requirement, and it is enforced in several layers:
 ## Requirements
 
 - Node 20+ and Rust (stable, MSVC toolchain on Windows)
-- **ffmpeg** on `PATH`, or `FFMPEG_PATH=/path/to/ffmpeg`
 - Windows: WebView2 runtime (preinstalled on Win11)
+- **No ffmpeg install required** — the app bundles its own (see below)
+
+## Bundled ffmpeg
+
+The app does **not** use whatever ffmpeg the user happens to have installed.
+`npm run ffmpeg:fetch` downloads a static Windows build (~100 MB) into
+`src-tauri/binaries/ffmpeg-<target-triple>.exe`, which Tauri ships as a sidecar
+next to the executable.
+
+That matters for two concrete reasons:
+
+- A Scoop/choco/winget ffmpeg on Windows is usually a **console shim**. It
+  allocates its own console and can double-spawn the real binary, so every probe
+  and every channel change flashed a black window.
+- Package-manager ffmpeg builds are GPL builds that get swapped out from under
+  the app; a known-good static build removes an entire class of "works on my
+  machine" failures.
+
+Resolution order in `ffmpeg.rs::resolve_ffmpeg`:
+`FFMPEG_PATH` override → bundled sidecar → `PATH`. Every spawn also passes
+`CREATE_NO_WINDOW` as a second line of defence.
+
+The binary is git-ignored and fetched on demand; `src-tauri/binaries/FFMPEG-LICENSE.txt`
+is tracked and ships inside the bundle. `ffmpeg` is licensed under the
+**GPL-2.0-or-later**, so any redistribution of the packaged app must keep that
+licence text and source offer intact — which is exactly what
+`src-tauri/binaries/FFMPEG-LICENSE.txt` does.
 
 ## Running
 
@@ -60,7 +86,8 @@ npm run dev            # http://localhost:1420
 npm run app:dev        # tauri dev
 ```
 
-Build a distributable installer with `npx tauri build`.
+Build a distributable installer with `npm run app:build` (`tauri build`). The
+installer carries the bundled ffmpeg, so the result is portable across machines.
 
 > The desktop app prefers port **8787** for its media server and falls back to an
 > ephemeral port, which the UI reads through the `media_base` command. If that IPC
@@ -116,7 +143,7 @@ Latest run on this machine:
 ```
 
 `cargo test` covers the M3U parser, ffmpeg argument construction, probe log
-parsing and session bookkeeping.
+parsing, ffmpeg sidecar resolution and session bookkeeping.
 
 ## Layout
 
@@ -131,6 +158,11 @@ src-tauri/src/
   session.rs             per-channel ffmpeg supervision and restart
   media_server.rs        axum HTTP + WebSocket + SSE surface
   fallback.rs            offline starter playlist
+scripts/
+  fetch-ffmpeg.mjs       downloads the bundled ffmpeg sidecar
+  verify-pipeline.mjs    end-to-end H.264/AAC stream check
+  verify-ui.mjs          real-Chromium playback check
+  stop-orphans.ps1       kill leftover ffmpeg processes
 ```
 
 ## Known limitations
@@ -143,3 +175,5 @@ src-tauri/src/
 - **No seeking.** These are live streams; playback starts at the live edge.
 - Community streams are unreliable by nature; the health dots, the hidden-offline
   mode and the retry flow exist because of that, not despite it.
+- The bundled ffmpeg makes the installer roughly **100 MB** larger. A shared-
+  library ffmpeg would shrink that, at the cost of shipping the DLLs instead.
