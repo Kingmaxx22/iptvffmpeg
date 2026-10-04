@@ -128,8 +128,15 @@ export default function App() {
     }
     // Offline channels are hidden by default: half the playlist is down at any
     // moment, and a dead card is noise. Only probed channels are affected.
+    //
+    // The channel that is actually on screen is never hidden, even if a stale or
+    // unlucky probe called it offline: making the thing you are watching vanish
+    // from the guide mid-playback reads as the app breaking.
     if (hideOffline) {
-      list = list.filter((channel) => probes[channel.id]?.health !== 'offline')
+      const playingId = playing?.id
+      list = list.filter(
+        (channel) => probes[channel.id]?.health !== 'offline' || channel.id === playingId,
+      )
     }
 
     const sorted = [...list]
@@ -146,7 +153,7 @@ export default function App() {
       sorted.sort((a, b) => a.name.localeCompare(b.name))
     }
     return sorted
-  }, [channels, nav, favorites, country, tab, query, sort, probes, hideOffline])
+  }, [channels, nav, favorites, country, tab, query, sort, probes, hideOffline, playing?.id])
 
   /** Probed channels known to be dead, for the "Hide offline" counter. */
   const offlineCount = useMemo(

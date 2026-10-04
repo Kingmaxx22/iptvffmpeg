@@ -28,9 +28,11 @@ const RING_CAPACITY: usize = 2 * 1024 * 1024;
 const STALL_TIMEOUT: Duration = Duration::from_secs(15);
 /// Nobody watching and untouched for this long == shut ffmpeg down.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(45);
-/// A dead endpoint must not respawn ffmpeg forever; three tries is enough to
-/// ride out a transient CDN hiccup without churning processes in the background.
-const MAX_RESTARTS: u32 = 3;
+/// A dead endpoint must not respawn ffmpeg forever, but a live source whose
+/// playlist token merely rolled over needs more than a couple of tries: the
+/// three-retry budget expired in ~6 s and declared working channels dead while
+/// the CDN was still re-arming. The backoff below keeps the total cost small.
+const MAX_RESTARTS: u32 = 6;
 const MAX_LOG_LINES: usize = 40;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -577,8 +579,9 @@ impl Session {
         }
 
         self.emit(PlaybackState::Reconnecting, Some(detail));
-        // Back off so a dead endpoint does not spin the CPU.
-        let delay = Duration::from_millis(400 * u64::from(attempt).pow(2));
+        // Back off so a dead endpoint does not spin the CPU, but keep retrying a
+        // source long enough to ride out a CDN hiccup.
+        let delay = Duration::from_millis(600 * u64::from(attempt).pow(2));
         tokio::time::sleep(delay.min(Duration::from_secs(5))).await;
 
         if self.should_run(generation) {

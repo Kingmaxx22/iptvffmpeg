@@ -364,8 +364,9 @@ pub async fn probe(ffmpeg: &PathBuf, channel: &Channel, timeout: Duration) -> Pr
                         apply_video_line(&mut info, kind);
                         info.ok = true;
                         info.latency_ms = started.elapsed().as_millis() as u64;
-                        // Slower sources count as degraded rather than healthy.
-                        info.health = if info.latency_ms > 6000 {
+                        // Confirmed playable; sources that needed most of the
+                        // probe budget are reported as degraded.
+                        info.health = if info.latency_ms as u128 > timeout.as_millis() * 3 / 4 {
                             HealthState::Degraded
                         } else {
                             HealthState::Online
@@ -409,11 +410,27 @@ pub async fn probe(ffmpeg: &PathBuf, channel: &Channel, timeout: Duration) -> Pr
     let _ = child.kill().await;
 
     if !info.ok {
-        info.error = Some(last_error.unwrap_or_else(|| {
-            "no video stream within probe window".to_string()
-        }));
+        let (health, error) = classify_probe_failure(last_error, timeout);
+        info.health = health;
+        info.error = Some(error);
     }
     info
+}
+
+/// Turn a probe that never confirmed a video stream into a verdict.
+///
+/// An explicit refusal (403/404, connection refused, unresolvable host) really
+/// is offline. Running out of time is not: the 6 s probe budget is routinely
+/// exceeded by a cold or busy CDN *while the channel plays perfectly*, and
+/// reporting that as `offline` made the guide hide working channels.
+fn classify_probe_failure(last_error: Option<String>, timeout: Duration) -> (HealthState, String) {
+    match last_error {
+        Some(error) => (HealthState::Offline, error),
+        None => (
+            HealthState::Degraded,
+            format!("no video stream within the {}s probe window", timeout.as_secs()),
+        ),
+    }
 }
 
 fn apply_video_line(info: &mut ProbeInfo, rest: &str) {
@@ -490,6 +507,22 @@ impl Default for ProbeInfo {
 mod tests {
     use super::*;
     use crate::playlist;
+
+    #[test]
+    fn probe_timeout_is_degraded_not_offline() {
+        // A busy CDN that simply did not answer in time still plays.
+        let (health, error) = classify_probe_failure(None, Duration::from_secs(6));
+        assert_eq!(health, HealthState::Degraded);
+        assert!(error.contains("probe window"));
+    }
+
+    #[test]
+    fn explicit_refusal_stays_offline() {
+        let (health, error) =
+            classify_probe_failure(Some("403 Forbidden".to_string()), Duration::from_secs(6));
+        assert_eq!(health, HealthState::Offline);
+        assert_eq!(error, "403 Forbidden");
+    }
 
     #[test]
     fn bundled_sidecar_wins_over_path() {
