@@ -1,0 +1,70 @@
+/*
+ * Fluent IPTV — design tokens.
+ * Values come straight from .agents/design/design.md (Windows 11 dark theme).
+ */
+
+:root {
+  /* Canvas + surface tiers (design.md "Elevation & Depth") */
+  --surface-canvas: #0f1115;
+  --surface-shell: #181b20;
+  --surface-card: #20242b;
+  --surface-card-hover: #272c35;
+  --surface-inset: #2d323c;
+
+  /* Accents + status */
+  --accent: #60cdff;
+  --accent-deep: #0078d4;
+  --accent-soft: rgba(96, 205, 255, 0.12);
+  --live: #e81123;
+  --ok: #107c41;
+  --warn: #ffb900;
+  --danger: #ffb4ab;
+
+  /* Foreground */
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-disabled: rgba(255, 255, 255, 0.4);
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-strong: rgba(255, 255, 255, 0.15);
+
+  /* Materials */
+  --acrylic-shell: rgba(24, 27, 32, 0.82);
+  --acrylic-floating: rgba(32, 36, 43, 0.94);
+  --blur-shell: blur(20px) saturate(140%);
+  --blur-overlay: blur(32px);
+  --shadow-overlay: 0 8px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+
+  /* Shapes (WinUI Level 2) */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* Spacing scale */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --gutter: 12px;
+  --margin: 16px;
+
+  /* Type scale */
+  --font: 'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --text-display: 600 36px/44px var(--font);
+  --text-headline: 600 22px/28px var(--font);
+  --text-title: 600 16px/22px var(--font);
+  --text-body: 400 13px/18px var(--font);
+  --text-label: 600 12px/16px var(--font);
+  --text-caption: 400 11px/14px var(--font);
+  --text-badge: 700 10px/12px var(--font);
+
+  --focus-ring: 0 0 0 2px var(--accent), 0 0 12px rgba(96, 205, 255, 0.35);
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  --nav-rail-width: 56px;
+  --nav-pane-width: 240px;
+  --nav-bar-height: 64px;
+  --commandbar-height: 56px;
+}

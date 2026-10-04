@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>Fluent IPTV</title>
+    <style>
+      /* Painted before any script runs: guarantees no white flash on window open. */
+      html,
+      body,
+      #root {
+        height: 100%;
+        margin: 0;
+        background-color: #0f1115;
+        color: #e2e2e8;
+      }
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        font: 500 13px/1.4 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+        color: rgba(255, 255, 255, 0.7);
+        letter-spacing: 0.02em;
+      }
+      #boot .ring {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.12);
+        border-top-color: #60cdff;
+        animation: boot-spin 0.9s linear infinite;
+      }
+      @keyframes boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="boot"><div class="ring"></div><div>Starting Fluent IPTV</div></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

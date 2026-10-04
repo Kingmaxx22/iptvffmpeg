@@ -1,0 +1,14 @@
+node_modules/
+dist/
+artifacts/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/artifacts/
+
+# Local agent tooling, not part of the application
+.agents/
+.claude/
+
+.DS_Store
+Thumbs.db
+*.log
