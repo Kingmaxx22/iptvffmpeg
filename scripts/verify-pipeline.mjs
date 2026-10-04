@@ -142,6 +142,28 @@ function countSyncBytes(bytes) {
   return count
 }
 
+/**
+ * Offset of the first transport-stream packet in the buffer.
+ *
+ * A relay hands a new subscriber the bytes from wherever the live stream
+ * happens to be, so an attachment can start mid-packet. Every parser here
+ * walks fixed 188-byte steps, so they all need the aligned view — slicing once
+ * up front is what keeps the alignment assertion meaningful instead of it
+ * failing on a byte offset the decoder itself would simply resynchronise past.
+ */
+function syncOffset(bytes) {
+  const limit = Math.min(bytes.length - 3 * 188, 4096)
+  for (let i = 0; i <= Math.max(limit, 0); i += 1) {
+    if (bytes[i] === 0x47 && bytes[i + 188] === 0x47 && bytes[i + 376] === 0x47) return i
+  }
+  return 0
+}
+
+function align(bytes) {
+  const offset = syncOffset(bytes)
+  return offset ? bytes.subarray(offset) : bytes
+}
+
 function tsStats(bytes) {
   const pids = new Set()
   let payloadUnitStart = 0
@@ -219,10 +241,11 @@ async function main() {
     }
 
     const result = await readWebSocket(`${BASE.replace('http', 'ws')}${session.wsPath}`, 12_000)
-    const stats = tsStats(result.bytes)
+    const aligned = align(result.bytes)
+    const stats = tsStats(aligned)
     log(`received ${result.bytes.length} bytes / ${stats.packets} packets from ${channel.name}`)
-    if (result.bytes.length > 100 * 188 && stats.packets > 100) {
-      played = { channel, session, result }
+    if (aligned.length > 100 * 188 && stats.packets > 100) {
+      played = { channel, session, bytes: aligned }
       break
     }
     log(`insufficient media from ${channel.name}; trying the next one`)
@@ -236,7 +259,7 @@ async function main() {
   sseAbort.abort()
   if (!played) throw new Error('no starter channel produced media; pipeline is broken')
 
-  const { bytes } = played.result
+  const { bytes } = played
   const stats = tsStats(bytes)
   const syncOk = countSyncBytes(bytes) > 0
   const pmt = parsePsi(bytes)
