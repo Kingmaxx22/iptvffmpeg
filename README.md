@@ -89,6 +89,25 @@ npm run app:dev        # tauri dev
 Build a distributable installer with `npm run app:build` (`tauri build`). The
 installer carries the bundled ffmpeg, so the result is portable across machines.
 
+## Portable build (no installer)
+
+```bash
+npm run app:portable      # -> artifacts/FluentIPTV-<version>-portable{,.zip}
+```
+
+Produces a folder you can copy anywhere and run — nothing to install, nothing to
+add to `PATH`:
+
+```
+FluentIPTV.exe                 the player
+ffmpeg.exe                     bundled transcoder (required)
+binaries/FFMPEG-LICENSE.txt    GPL attribution
+README.txt
+```
+
+The only external requirement is the **Microsoft Edge WebView2 Runtime**, which is
+preinstalled on Windows 11 (on Windows 10 use the Evergreen bootstrapper once).
+
 > The desktop app prefers port **8787** for its media server and falls back to an
 > ephemeral port, which the UI reads through the `media_base` command. If that IPC
 > is ever unavailable the UI falls back to `http://127.0.0.1:8787`, so a running
@@ -160,6 +179,7 @@ src-tauri/src/
   fallback.rs            offline starter playlist
 scripts/
   fetch-ffmpeg.mjs       downloads the bundled ffmpeg sidecar
+  make-portable.mjs      assembles the no-installer portable build
   verify-pipeline.mjs    end-to-end H.264/AAC stream check
   verify-ui.mjs          real-Chromium playback check
   stop-orphans.ps1       kill leftover ffmpeg processes

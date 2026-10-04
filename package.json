@@ -14,6 +14,7 @@
     "dev:server": "cargo run --manifest-path src-tauri/Cargo.toml --bin media-server",
     "app:dev": "npm run ffmpeg:fetch && tauri dev",
     "app:build": "npm run ffmpeg:fetch && tauri build",
+"app:portable": "npm run ffmpeg:fetch && tauri build --no-bundle && node scripts/make-portable.mjs --zip",
     "stop:orphans": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-orphans.ps1"
   },
   "dependencies": {
